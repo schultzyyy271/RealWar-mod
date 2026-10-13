@@ -1,0 +1,9 @@
+Package: local.example.gemdebugdemo
+Name: GemDebugDemo
+Version: 0.0.1
+Architecture: iphoneos-arm
+Description: Local gem-balance debug overlay for an app you own.
+Maintainer: you
+Author: you
+Section: Tweaks
+Depends: mobilesubstrate
