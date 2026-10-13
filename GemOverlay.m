@@ -50,16 +50,20 @@ static UIWindow *GemKeyWindow(void) {
         stack.spacing = 6;
 
 #if GEM_DEBUG_UI
-        UIButtonConfiguration *cfg = [UIButtonConfiguration filledButtonConfiguration];
-        cfg.title = @"Set debug gems to 99,999";
-        cfg.titleTextAttributesTransformer = ^UIConfigurationTextAttributesContainer *(UIConfigurationTextAttributesContainer *c) {
-            c.font = [UIFont systemFontOfSize:12 weight:UIFontWeightSemibold];
-            return c;
-        };
-        UIButton *button = [UIButton buttonWithConfiguration:cfg primaryAction:
-            [UIAction actionWithHandler:^(UIAction *a) {
-                [[GemState shared] set_gemsAmountBigIntegerObservedValue];
-            }]];
+        UIAction *action = [UIAction actionWithTitle:@"Set debug gems to 99,999"
+                                               image:nil
+                                          identifier:nil
+                                             handler:^(__kindof UIAction *a) {
+            [[GemState shared] set_gemsAmountBigIntegerObservedValue];
+        }];
+        UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem primaryAction:action];
+        button.titleLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightSemibold];
+        [button setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
+        button.backgroundColor = UIColor.systemBlueColor;
+        button.layer.cornerRadius = 8;
+        button.translatesAutoresizingMaskIntoConstraints = NO;
+        [button.heightAnchor constraintEqualToConstant:32].active = YES;
+        [button.widthAnchor constraintEqualToConstant:190].active = YES;
         [stack addArrangedSubview:button];
 #else
         UILabel *note = [UILabel new];
