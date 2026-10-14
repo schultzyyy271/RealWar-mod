@@ -45,7 +45,7 @@ typedef struct {
 + (BOOL)isReady;
 
 /// Attempts to initialize the IL2CPP bridge. Call early (e.g., from %ctor).
-+ (void)initialize;
++ (void)setup;
 
 /// Returns current gems count from game state, or -1 if unavailable
 + (int64_t)currentGems;

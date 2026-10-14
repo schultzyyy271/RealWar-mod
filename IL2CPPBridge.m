@@ -59,7 +59,7 @@ static void *ResolveRVA(uintptr_t rva) {
     return s_ready;
 }
 
-+ (void)initialize {
++ (void)setup {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         [self doInit];
