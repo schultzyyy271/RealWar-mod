@@ -57,13 +57,13 @@ jobs:
       - name: Stage dylib
         run: |
           mkdir -p output
-          DYLIB=$(find .theos/obj -name GemDebugDemo.dylib | head -n 1)
+          DYLIB=$(find .theos/obj -name "RealWarMod.dylib" | head -n 1)
           echo "Found: $DYLIB"
           cp "$DYLIB" output/
-          cp GemDebugDemo.plist output/
+          cp RealWarMod.plist output/
 
       - name: Upload dylib
         uses: actions/upload-artifact@v4
         with:
-          name: GemDebugDemo.dylib
+          name: RealWarMod.dylib
           path: output/
