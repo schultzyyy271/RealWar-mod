@@ -1,7 +1,7 @@
 #import "GemState.h"
+#import "IL2CPPBridge.h"
 
 NSString *const GemStateDidChangeNotification = @"GemStateDidChangeNotification";
-static NSString *const kGemsDefaultsKey = @"RealWarMod.gems.fallback";
 
 @interface GemState ()
 @property (nonatomic, readwrite) NSInteger gems;
@@ -20,31 +20,27 @@ static NSString *const kGemsDefaultsKey = @"RealWarMod.gems.fallback";
 - (instancetype)init {
     if ((self = [super init])) {
         _isLive = NO;
-        _gems = [NSUserDefaults.standardUserDefaults integerForKey:kGemsDefaultsKey];
+        _gems = 0;
     }
     return self;
 }
 
-- (void)refresh {
-    // For now, just use local storage (IL2CPP integration needs debugging)
-    _gems = [NSUserDefaults.standardUserDefaults integerForKey:kGemsDefaultsKey];
-}
-
-- (BOOL)updateGems:(NSInteger)gems {
-    gems = MAX(gems, 0);
-    _gems = gems;
-    [NSUserDefaults.standardUserDefaults setInteger:gems forKey:kGemsDefaultsKey];
-    [self postNotification];
-    return YES;
-}
-
 - (BOOL)addGems:(NSInteger)amount {
-    return [self updateGems:self.gems + amount];
-}
-
-- (void)postNotification {
-    [[NSNotificationCenter defaultCenter]
-        postNotificationName:GemStateDidChangeNotification object:self];
+    // Try IL2CPP first
+    if ([IL2CPPBridge isReady]) {
+        BOOL ok = [IL2CPPBridge addGems:amount];
+        if (ok) {
+            _isLive = YES;
+            _gems += amount;
+            return YES;
+        }
+    }
+    
+    // Not ready - just track locally
+    _isLive = NO;
+    _gems += amount;
+    NSLog(@"[RealWarMod] IL2CPP not ready, gems tracked locally: %ld", (long)_gems);
+    return NO;
 }
 
 @end
