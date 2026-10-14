@@ -15,6 +15,7 @@ typedef NS_ENUM(NSInteger, ModButtonType) {
 
 @implementation GemOverlay {
     ModButtonType _type;
+    NSTimer *_sprayTimer;
 }
 
 + (void)installIfNeeded {
@@ -44,7 +45,7 @@ typedef NS_ENUM(NSInteger, ModButtonType) {
     CGFloat toggleSize = 30;
     CGFloat margin = 8;
     CGFloat spacing = 8;
-    CGFloat startY = s_overlayWindow.bounds.size.height * 0.55; // Moved down
+    CGFloat startY = s_overlayWindow.bounds.size.height * 0.45; // Middle position
     CGFloat x = s_overlayWindow.bounds.size.width - size - margin;
     
     // Toggle button (small, at top)
@@ -133,10 +134,15 @@ typedef NS_ENUM(NSInteger, ModButtonType) {
         
         [self addTarget:self action:@selector(tapped) forControlEvents:UIControlEventTouchUpInside];
         
-        // Only gem/coin buttons are draggable
+        // Only gem/coin buttons are draggable and support hold-to-spray
         if (type != ModButtonTypeToggle) {
             UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(dragged:)];
             [self addGestureRecognizer:pan];
+            
+            // Long press for spray mode
+            UILongPressGestureRecognizer *hold = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(holdGesture:)];
+            hold.minimumPressDuration = 0.3;
+            [self addGestureRecognizer:hold];
         }
     }
     return self;
@@ -184,6 +190,42 @@ typedef NS_ENUM(NSInteger, ModButtonType) {
     newY = MAX(minY, MIN(maxY, newY));
     self.center = CGPointMake(self.center.x, newY);
     [pan setTranslation:CGPointZero inView:self.superview];
+}
+
+- (void)holdGesture:(UILongPressGestureRecognizer *)gesture {
+    if (gesture.state == UIGestureRecognizerStateBegan) {
+        // Start spraying
+        [self sprayTick];  // Immediate first tick
+        _sprayTimer = [NSTimer scheduledTimerWithTimeInterval:0.05  // 20 per second
+                                                       target:self
+                                                     selector:@selector(sprayTick)
+                                                     userInfo:nil
+                                                      repeats:YES];
+        // Keep button scaled while holding
+        [UIView animateWithDuration:0.1 animations:^{
+            self.transform = CGAffineTransformMakeScale(1.2, 1.2);
+        }];
+    } else if (gesture.state == UIGestureRecognizerStateEnded || 
+               gesture.state == UIGestureRecognizerStateCancelled) {
+        // Stop spraying
+        [_sprayTimer invalidate];
+        _sprayTimer = nil;
+        [UIView animateWithDuration:0.1 animations:^{
+            self.transform = CGAffineTransformIdentity;
+        }];
+    }
+}
+
+- (void)sprayTick {
+    @try {
+        if (_type == ModButtonTypeGem) {
+            [[GemState shared] addGems:1];
+        } else if (_type == ModButtonTypeCoin) {
+            [IL2CPPBridge addCoins:1000];
+        }
+    } @catch (NSException *e) {
+        // Ignore errors during spray
+    }
 }
 
 @end
