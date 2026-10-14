@@ -4,10 +4,13 @@
 
 static UIWindow *s_overlayWindow = nil;
 static const NSInteger kButtonTagBase = 9999;
+static BOOL s_buttonsHidden = NO;
+static NSMutableArray<GemOverlay *> *s_modButtons = nil;
 
 typedef NS_ENUM(NSInteger, ModButtonType) {
     ModButtonTypeGem = 0,
     ModButtonTypeCoin = 1,
+    ModButtonTypeToggle = 2,
 };
 
 @implementation GemOverlay {
@@ -26,7 +29,8 @@ typedef NS_ENUM(NSInteger, ModButtonType) {
     }
     if (!scene) return;
     
-    // Create passthrough window
+    s_modButtons = [NSMutableArray new];
+    
     s_overlayWindow = [[GemPassthroughWindow alloc] initWithWindowScene:scene];
     s_overlayWindow.frame = scene.coordinateSpace.bounds;
     s_overlayWindow.windowLevel = UIWindowLevelAlert + 100;
@@ -37,39 +41,67 @@ typedef NS_ENUM(NSInteger, ModButtonType) {
     s_overlayWindow.rootViewController = vc;
     
     CGFloat size = 50;
+    CGFloat toggleSize = 30;
     CGFloat margin = 8;
     CGFloat spacing = 8;
-    CGFloat startY = s_overlayWindow.bounds.size.height * 0.35;
+    CGFloat startY = s_overlayWindow.bounds.size.height * 0.55; // Moved down
     CGFloat x = s_overlayWindow.bounds.size.width - size - margin;
+    
+    // Toggle button (small, at top)
+    GemOverlay *toggleBtn = [[GemOverlay alloc] initWithFrame:CGRectMake(
+        s_overlayWindow.bounds.size.width - toggleSize - margin,
+        startY - toggleSize - spacing,
+        toggleSize, toggleSize
+    ) type:ModButtonTypeToggle];
+    toggleBtn.tag = kButtonTagBase + 2;
+    [vc.view addSubview:toggleBtn];
     
     // Gem button
     GemOverlay *gemBtn = [[GemOverlay alloc] initWithFrame:CGRectMake(x, startY, size, size) type:ModButtonTypeGem];
     gemBtn.tag = kButtonTagBase;
     [vc.view addSubview:gemBtn];
+    [s_modButtons addObject:gemBtn];
     
     // Coin button (below gem)
     GemOverlay *coinBtn = [[GemOverlay alloc] initWithFrame:CGRectMake(x, startY + size + spacing, size, size) type:ModButtonTypeCoin];
     coinBtn.tag = kButtonTagBase + 1;
     [vc.view addSubview:coinBtn];
+    [s_modButtons addObject:coinBtn];
+}
+
++ (void)toggleButtons {
+    s_buttonsHidden = !s_buttonsHidden;
+    
+    [UIView animateWithDuration:0.2 animations:^{
+        for (GemOverlay *btn in s_modButtons) {
+            btn.alpha = s_buttonsHidden ? 0.0 : 1.0;
+            btn.userInteractionEnabled = !s_buttonsHidden;
+        }
+    }];
 }
 
 - (instancetype)initWithFrame:(CGRect)frame type:(ModButtonType)type {
     if ((self = [super initWithFrame:frame])) {
         _type = type;
         
-        // Colors based on type
         UIColor *bgColor;
         NSString *iconName;
-        NSString *labelText;
+        NSString *labelText = nil;
+        CGFloat iconSize = 18;
         
         if (type == ModButtonTypeGem) {
             bgColor = [UIColor.systemBlueColor colorWithAlphaComponent:0.9];
             iconName = @"diamond.fill";
             labelText = @"+1";
-        } else {
+        } else if (type == ModButtonTypeCoin) {
             bgColor = [UIColor.systemYellowColor colorWithAlphaComponent:0.9];
             iconName = @"dollarsign.circle.fill";
             labelText = @"+1k";
+        } else {
+            // Toggle button - smaller, gray
+            bgColor = [UIColor.systemGrayColor colorWithAlphaComponent:0.8];
+            iconName = @"eye.fill";
+            iconSize = 14;
         }
         
         self.backgroundColor = bgColor;
@@ -81,26 +113,31 @@ typedef NS_ENUM(NSInteger, ModButtonType) {
         self.layer.borderWidth = 2;
         self.layer.borderColor = UIColor.whiteColor.CGColor;
         
-        UIImageConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:18 weight:UIImageSymbolWeightBold];
+        UIImageConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:iconSize weight:UIImageSymbolWeightBold];
         UIImage *icon = [UIImage systemImageNamed:iconName withConfiguration:cfg];
         [self setImage:icon forState:UIControlStateNormal];
         self.tintColor = UIColor.whiteColor;
         
-        UILabel *label = [UILabel new];
-        label.text = labelText;
-        label.font = [UIFont systemFontOfSize:8 weight:UIFontWeightBold];
-        label.textColor = UIColor.whiteColor;
-        label.translatesAutoresizingMaskIntoConstraints = NO;
-        [self addSubview:label];
-        [NSLayoutConstraint activateConstraints:@[
-            [label.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
-            [label.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-4],
-        ]];
+        if (labelText) {
+            UILabel *label = [UILabel new];
+            label.text = labelText;
+            label.font = [UIFont systemFontOfSize:8 weight:UIFontWeightBold];
+            label.textColor = UIColor.whiteColor;
+            label.translatesAutoresizingMaskIntoConstraints = NO;
+            [self addSubview:label];
+            [NSLayoutConstraint activateConstraints:@[
+                [label.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
+                [label.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-4],
+            ]];
+        }
         
         [self addTarget:self action:@selector(tapped) forControlEvents:UIControlEventTouchUpInside];
         
-        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(dragged:)];
-        [self addGestureRecognizer:pan];
+        // Only gem/coin buttons are draggable
+        if (type != ModButtonTypeToggle) {
+            UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(dragged:)];
+            [self addGestureRecognizer:pan];
+        }
     }
     return self;
 }
@@ -110,6 +147,15 @@ typedef NS_ENUM(NSInteger, ModButtonType) {
 }
 
 - (void)tapped {
+    if (_type == ModButtonTypeToggle) {
+        [GemOverlay toggleButtons];
+        // Update icon
+        NSString *iconName = s_buttonsHidden ? @"eye.slash.fill" : @"eye.fill";
+        UIImageConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:14 weight:UIImageSymbolWeightBold];
+        [self setImage:[UIImage systemImageNamed:iconName withConfiguration:cfg] forState:UIControlStateNormal];
+        return;
+    }
+    
     @try {
         if (_type == ModButtonTypeGem) {
             [[GemState shared] addGems:1];
@@ -148,7 +194,7 @@ typedef NS_ENUM(NSInteger, ModButtonType) {
 
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
     for (UIView *subview in self.rootViewController.view.subviews) {
-        if (subview.tag >= kButtonTagBase) {
+        if (subview.tag >= kButtonTagBase && subview.alpha > 0.5 && subview.userInteractionEnabled) {
             CGPoint converted = [self convertPoint:point toView:subview];
             if ([subview pointInside:converted withEvent:event]) {
                 return YES;
@@ -178,7 +224,7 @@ typedef NS_ENUM(NSInteger, ModButtonType) {
 
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
     for (UIView *subview in self.subviews) {
-        if (subview.tag >= kButtonTagBase) {
+        if (subview.tag >= kButtonTagBase && subview.alpha > 0.5 && subview.userInteractionEnabled) {
             CGPoint converted = [self convertPoint:point toView:subview];
             if ([subview pointInside:converted withEvent:event]) {
                 return YES;
