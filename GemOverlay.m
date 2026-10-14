@@ -1,48 +1,61 @@
 #import "GemOverlay.h"
 #import "GemState.h"
 
+static UIWindow *s_overlayWindow = nil;
+
 @implementation GemOverlay {
     CGFloat _dragStartY;
 }
 
-static UIWindow *GemKeyWindow(void) {
-    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
-        if (![scene isKindOfClass:UIWindowScene.class]) continue;
-        if (scene.activationState != UISceneActivationStateForegroundActive) continue;
-        for (UIWindow *w in ((UIWindowScene *)scene).windows) {
-            if (w.isKeyWindow) return w;
++ (void)installIfNeeded {
+    if (s_overlayWindow) return; // Already installed
+    
+    // Get the active window scene
+    UIWindowScene *scene = nil;
+    for (UIScene *s in UIApplication.sharedApplication.connectedScenes) {
+        if ([s isKindOfClass:UIWindowScene.class] && s.activationState == UISceneActivationStateForegroundActive) {
+            scene = (UIWindowScene *)s;
+            break;
         }
     }
-    return nil;
-}
-
-+ (void)installIfNeeded {
-    UIWindow *window = GemKeyWindow();
-    if (!window) return;
-    for (UIView *v in window.subviews) if ([v isKindOfClass:self]) return;
-
+    if (!scene) return;
+    
+    // Create a passthrough overlay window at a high window level
+    s_overlayWindow = [[UIWindow alloc] initWithWindowScene:scene];
+    s_overlayWindow.frame = scene.coordinateSpace.bounds;
+    s_overlayWindow.windowLevel = UIWindowLevelAlert + 100; // Above everything
+    s_overlayWindow.backgroundColor = UIColor.clearColor;
+    s_overlayWindow.userInteractionEnabled = YES;
+    s_overlayWindow.hidden = NO;
+    
+    // Make window pass through touches except on the button
+    s_overlayWindow.rootViewController = [GemOverlayVC new];
+    
+    // Create and add the button
     CGFloat size = 50;
     CGFloat margin = 8;
     GemOverlay *btn = [[GemOverlay alloc] initWithFrame:CGRectMake(
-        window.bounds.size.width - size - margin,
-        window.bounds.size.height * 0.4,
+        s_overlayWindow.bounds.size.width - size - margin,
+        s_overlayWindow.bounds.size.height * 0.4,
         size, size
     )];
-    [window addSubview:btn];
+    [s_overlayWindow.rootViewController.view addSubview:btn];
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
     if ((self = [super initWithFrame:frame])) {
         // Appearance: circular gem button
-        self.backgroundColor = [UIColor.systemBlueColor colorWithAlphaComponent:0.85];
+        self.backgroundColor = [UIColor.systemBlueColor colorWithAlphaComponent:0.9];
         self.layer.cornerRadius = frame.size.width / 2;
         self.layer.shadowColor = UIColor.blackColor.CGColor;
         self.layer.shadowOffset = CGSizeMake(0, 2);
-        self.layer.shadowOpacity = 0.3;
+        self.layer.shadowOpacity = 0.4;
         self.layer.shadowRadius = 4;
+        self.layer.borderWidth = 2;
+        self.layer.borderColor = UIColor.whiteColor.CGColor;
         
         // Gem icon
-        UIImageConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:22 weight:UIImageSymbolWeightBold];
+        UIImageConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:20 weight:UIImageSymbolWeightBold];
         UIImage *gem = [UIImage systemImageNamed:@"diamond.fill" withConfiguration:cfg];
         [self setImage:gem forState:UIControlStateNormal];
         self.tintColor = UIColor.whiteColor;
@@ -50,13 +63,13 @@ static UIWindow *GemKeyWindow(void) {
         // +1 label
         UILabel *plus = [UILabel new];
         plus.text = @"+1";
-        plus.font = [UIFont systemFontOfSize:10 weight:UIFontWeightBold];
+        plus.font = [UIFont systemFontOfSize:9 weight:UIFontWeightBold];
         plus.textColor = UIColor.whiteColor;
         plus.translatesAutoresizingMaskIntoConstraints = NO;
         [self addSubview:plus];
         [NSLayoutConstraint activateConstraints:@[
             [plus.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
-            [plus.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-4],
+            [plus.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-5],
         ]];
         
         // Tap action
@@ -74,11 +87,13 @@ static UIWindow *GemKeyWindow(void) {
     [[GemState shared] addGems:1];
     
     // Quick pulse animation feedback
-    [UIView animateWithDuration:0.1 animations:^{
-        self.transform = CGAffineTransformMakeScale(1.2, 1.2);
+    [UIView animateWithDuration:0.08 animations:^{
+        self.transform = CGAffineTransformMakeScale(1.3, 1.3);
+        self.alpha = 0.7;
     } completion:^(BOOL finished) {
-        [UIView animateWithDuration:0.1 animations:^{
+        [UIView animateWithDuration:0.08 animations:^{
             self.transform = CGAffineTransformIdentity;
+            self.alpha = 1.0;
         }];
     }];
 }
@@ -88,12 +103,33 @@ static UIWindow *GemKeyWindow(void) {
     
     // Move only vertically, clamp to screen bounds
     CGFloat newY = self.center.y + translation.y;
-    CGFloat minY = self.bounds.size.height / 2 + self.superview.safeAreaInsets.top;
-    CGFloat maxY = self.superview.bounds.size.height - self.bounds.size.height / 2 - self.superview.safeAreaInsets.bottom;
+    CGFloat minY = self.bounds.size.height / 2 + 50;  // Below status bar
+    CGFloat maxY = self.superview.bounds.size.height - self.bounds.size.height / 2 - 50;
     newY = MAX(minY, MIN(maxY, newY));
     
     self.center = CGPointMake(self.center.x, newY);
     [pan setTranslation:CGPointZero inView:self.superview];
+}
+
+@end
+
+#pragma mark - Passthrough View Controller
+
+@implementation GemOverlayVC
+
+- (void)loadView {
+    self.view = [GemPassthroughView new];
+    self.view.backgroundColor = UIColor.clearColor;
+}
+
+@end
+
+@implementation GemPassthroughView
+
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *hit = [super hitTest:point withEvent:event];
+    // Only intercept touches on actual subviews (the button), pass through otherwise
+    return (hit == self) ? nil : hit;
 }
 
 @end
