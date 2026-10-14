@@ -1,9 +1,18 @@
 #import "GemOverlay.h"
 #import "GemState.h"
+#import "IL2CPPBridge.h"
 
 static UIWindow *s_overlayWindow = nil;
+static const NSInteger kButtonTagBase = 9999;
 
-@implementation GemOverlay
+typedef NS_ENUM(NSInteger, ModButtonType) {
+    ModButtonTypeGem = 0,
+    ModButtonTypeCoin = 1,
+};
+
+@implementation GemOverlay {
+    ModButtonType _type;
+}
 
 + (void)installIfNeeded {
     if (s_overlayWindow) return;
@@ -24,25 +33,46 @@ static UIWindow *s_overlayWindow = nil;
     s_overlayWindow.backgroundColor = UIColor.clearColor;
     s_overlayWindow.hidden = NO;
     
-    // Empty root VC with passthrough view
     GemOverlayVC *vc = [GemOverlayVC new];
     s_overlayWindow.rootViewController = vc;
     
-    // Add button
     CGFloat size = 50;
     CGFloat margin = 8;
-    GemOverlay *btn = [[GemOverlay alloc] initWithFrame:CGRectMake(
-        s_overlayWindow.bounds.size.width - size - margin,
-        s_overlayWindow.bounds.size.height * 0.4,
-        size, size
-    )];
-    btn.tag = 9999; // Tag to identify our button
-    [vc.view addSubview:btn];
+    CGFloat spacing = 8;
+    CGFloat startY = s_overlayWindow.bounds.size.height * 0.35;
+    CGFloat x = s_overlayWindow.bounds.size.width - size - margin;
+    
+    // Gem button
+    GemOverlay *gemBtn = [[GemOverlay alloc] initWithFrame:CGRectMake(x, startY, size, size) type:ModButtonTypeGem];
+    gemBtn.tag = kButtonTagBase;
+    [vc.view addSubview:gemBtn];
+    
+    // Coin button (below gem)
+    GemOverlay *coinBtn = [[GemOverlay alloc] initWithFrame:CGRectMake(x, startY + size + spacing, size, size) type:ModButtonTypeCoin];
+    coinBtn.tag = kButtonTagBase + 1;
+    [vc.view addSubview:coinBtn];
 }
 
-- (instancetype)initWithFrame:(CGRect)frame {
+- (instancetype)initWithFrame:(CGRect)frame type:(ModButtonType)type {
     if ((self = [super initWithFrame:frame])) {
-        self.backgroundColor = [UIColor.systemBlueColor colorWithAlphaComponent:0.9];
+        _type = type;
+        
+        // Colors based on type
+        UIColor *bgColor;
+        NSString *iconName;
+        NSString *labelText;
+        
+        if (type == ModButtonTypeGem) {
+            bgColor = [UIColor.systemBlueColor colorWithAlphaComponent:0.9];
+            iconName = @"diamond.fill";
+            labelText = @"+1";
+        } else {
+            bgColor = [UIColor.systemYellowColor colorWithAlphaComponent:0.9];
+            iconName = @"dollarsign.circle.fill";
+            labelText = @"+1k";
+        }
+        
+        self.backgroundColor = bgColor;
         self.layer.cornerRadius = frame.size.width / 2;
         self.layer.shadowColor = UIColor.blackColor.CGColor;
         self.layer.shadowOffset = CGSizeMake(0, 2);
@@ -51,20 +81,20 @@ static UIWindow *s_overlayWindow = nil;
         self.layer.borderWidth = 2;
         self.layer.borderColor = UIColor.whiteColor.CGColor;
         
-        UIImageConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:20 weight:UIImageSymbolWeightBold];
-        UIImage *gem = [UIImage systemImageNamed:@"diamond.fill" withConfiguration:cfg];
-        [self setImage:gem forState:UIControlStateNormal];
+        UIImageConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:18 weight:UIImageSymbolWeightBold];
+        UIImage *icon = [UIImage systemImageNamed:iconName withConfiguration:cfg];
+        [self setImage:icon forState:UIControlStateNormal];
         self.tintColor = UIColor.whiteColor;
         
-        UILabel *plus = [UILabel new];
-        plus.text = @"+1";
-        plus.font = [UIFont systemFontOfSize:9 weight:UIFontWeightBold];
-        plus.textColor = UIColor.whiteColor;
-        plus.translatesAutoresizingMaskIntoConstraints = NO;
-        [self addSubview:plus];
+        UILabel *label = [UILabel new];
+        label.text = labelText;
+        label.font = [UIFont systemFontOfSize:8 weight:UIFontWeightBold];
+        label.textColor = UIColor.whiteColor;
+        label.translatesAutoresizingMaskIntoConstraints = NO;
+        [self addSubview:label];
         [NSLayoutConstraint activateConstraints:@[
-            [plus.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
-            [plus.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-5],
+            [label.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
+            [label.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-4],
         ]];
         
         [self addTarget:self action:@selector(tapped) forControlEvents:UIControlEventTouchUpInside];
@@ -75,13 +105,19 @@ static UIWindow *s_overlayWindow = nil;
     return self;
 }
 
+- (instancetype)initWithFrame:(CGRect)frame {
+    return [self initWithFrame:frame type:ModButtonTypeGem];
+}
+
 - (void)tapped {
-    // Safe gem add - just log if not ready
     @try {
-        [[GemState shared] addGems:1];
-        NSLog(@"[RealWarMod] Added 1 gem");
+        if (_type == ModButtonTypeGem) {
+            [[GemState shared] addGems:1];
+        } else {
+            [IL2CPPBridge addCoins:1000];
+        }
     } @catch (NSException *e) {
-        NSLog(@"[RealWarMod] Gem add failed: %@", e);
+        NSLog(@"[RealWarMod] Tap failed: %@", e);
     }
     
     // Pulse animation
@@ -111,9 +147,8 @@ static UIWindow *s_overlayWindow = nil;
 @implementation GemPassthroughWindow
 
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
-    // Only handle touches on the gem button, pass everything else through
     for (UIView *subview in self.rootViewController.view.subviews) {
-        if (subview.tag == 9999) {
+        if (subview.tag >= kButtonTagBase) {
             CGPoint converted = [self convertPoint:point toView:subview];
             if ([subview pointInside:converted withEvent:event]) {
                 return YES;
@@ -143,7 +178,7 @@ static UIWindow *s_overlayWindow = nil;
 
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
     for (UIView *subview in self.subviews) {
-        if (subview.tag == 9999) {
+        if (subview.tag >= kButtonTagBase) {
             CGPoint converted = [self convertPoint:point toView:subview];
             if ([subview pointInside:converted withEvent:event]) {
                 return YES;

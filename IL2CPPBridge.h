@@ -7,8 +7,10 @@
 
 /// Returns YES if bridge is ready to modify gems
 + (BOOL)isReady;
-
 /// Adds gems to the actual game state. Returns YES on success.
 + (BOOL)addGems:(int64_t)amount;
+
+/// Adds coins to the actual game state. Returns YES on success.
++ (BOOL)addCoins:(int64_t)amount;
 
 @end

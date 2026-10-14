@@ -42,6 +42,7 @@ static const uintptr_t RVA_BigIntegerObservedValue_Add = 0x27986A4;
 
 // Offsets from dump.cs
 static const size_t OFFSET_PersistentDataManager_persistentData = 0x20;
+static const size_t OFFSET_PersistentData_coinsAmount = 0x18;
 static const size_t OFFSET_PersistentData_gemsAmount = 0x28;
 
 static uintptr_t FindUnityFramework(void) {
@@ -183,6 +184,47 @@ static uintptr_t FindUnityFramework(void) {
     @try {
         s_addFunc(gemsOV, amountBI, 1, NULL);
         NSLog(@"[RealWarMod] Successfully added %lld gems!", amount);
+        return YES;
+    } @catch (NSException *e) {
+        NSLog(@"[RealWarMod] Exception calling Add: %@", e);
+        return NO;
+    }
+}
+
++ (BOOL)addCoins:(int64_t)amount {
+    if (!s_ready) {
+        NSLog(@"[RealWarMod] Bridge not ready");
+        return NO;
+    }
+    
+    il2cpp_field_static_get_value_t static_get = dlsym(RTLD_DEFAULT, "il2cpp_field_static_get_value");
+    if (!static_get) return NO;
+    
+    void *instance = NULL;
+    static_get(s_instanceField, &instance);
+    if (!instance) return NO;
+    
+    void *persistentData = *(void **)((uint8_t *)instance + OFFSET_PersistentDataManager_persistentData);
+    if (!persistentData) return NO;
+    
+    // Get coinsAmountBigIntegerObservedValue (offset 0x18)
+    void *coinsOV = *(void **)((uint8_t *)persistentData + OFFSET_PersistentData_coinsAmount);
+    if (!coinsOV) {
+        NSLog(@"[RealWarMod] coinsAmountBigIntegerObservedValue is null");
+        return NO;
+    }
+    
+    NSLog(@"[RealWarMod] Adding %lld coins to ObservedValue at %p", amount, coinsOV);
+    
+    BigInteger amountBI = {
+        ._sign = (int32_t)amount,
+        ._pad = 0,
+        ._bits = NULL
+    };
+    
+    @try {
+        s_addFunc(coinsOV, amountBI, 1, NULL);
+        NSLog(@"[RealWarMod] Successfully added %lld coins!", amount);
         return YES;
     } @catch (NSException *e) {
         NSLog(@"[RealWarMod] Exception calling Add: %@", e);
