@@ -5,6 +5,10 @@
 + (void)installIfNeeded;
 @end
 
+/// Window that passes touches through except to the gem button
+@interface GemPassthroughWindow : UIWindow
+@end
+
 /// Passthrough view controller for overlay window
 @interface GemOverlayVC : UIViewController
 @end
