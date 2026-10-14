@@ -12,7 +12,7 @@ extern NSString *const GemStateDidChangeNotification;
 + (instancetype)shared;
 
 /// Set gems to exact value. Works on live game state when available.
-- (BOOL)setGems:(NSInteger)gems;
+- (BOOL)updateGems:(NSInteger)value;
 
 /// Add gems to current value. Works on live game state when available.
 - (BOOL)addGems:(NSInteger)amount;

@@ -36,7 +36,7 @@ static NSString *const kGemsDefaultsKey = @"RealWarMod.gems.fallback";
     }
 }
 
-- (BOOL)setGems:(NSInteger)gems {
+- (BOOL)updateGems:(NSInteger)gems {
     gems = MAX(gems, 0);
     
     if ([IL2CPPBridge isReady]) {
@@ -68,7 +68,7 @@ static NSString *const kGemsDefaultsKey = @"RealWarMod.gems.fallback";
     }
     
     // Fallback to local storage
-    return [self setGems:self.gems + amount];
+    return [self updateGems:self.gems + amount];
 }
 
 - (void)postNotification {
