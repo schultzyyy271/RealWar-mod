@@ -1,20 +1,13 @@
 TARGET := iphone:clang:latest:14.0
-ARCHS = arm64 arm64e
-# Process to respawn after `make install` -- set to YOUR app's executable name
-INSTALL_TARGET_PROCESSES = GemDebugDemo
+ARCHS = arm64
+# Process to respawn after `make install`.
+INSTALL_TARGET_PROCESSES = RealWar
 
 include $(THEOS)/makefiles/common.mk
 
-TWEAK_NAME = GemDebugDemo
+TWEAK_NAME = RealWarMod
 
-GemDebugDemo_FILES = Tweak.x GemState.m GemOverlay.m
-GemDebugDemo_FRAMEWORKS = UIKit Foundation
-GemDebugDemo_CFLAGS = -fobjc-arc
-
-# Mirrors the original #if DEBUG: the debug button is compiled out of
-# release builds (make package FINALPACKAGE=1).
-ifneq ($(FINALPACKAGE),1)
-GemDebugDemo_CFLAGS += -DGEM_DEBUG_UI=1
-endif
-
+RealWarMod_FILES = Tweak.x GemState.m GemOverlay.m IL2CPPBridge.m
+RealWarMod_FRAMEWORKS = UIKit Foundation
+RealWarMod_CFLAGS = -fobjc-arc
 include $(THEOS_MAKE_PATH)/tweak.mk

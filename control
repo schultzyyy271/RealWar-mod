@@ -1,8 +1,8 @@
-Package: local.example.gemdebugdemo
-Name: GemDebugDemo
+Package: local.example.realwarmod
+Name: RealWarMod
 Version: 0.0.1
 Architecture: iphoneos-arm
-Description: Local gem-balance debug overlay for an app you own.
+Description: Local debug overlay for the RealWar app.
 Maintainer: you
 Author: you
 Section: Tweaks

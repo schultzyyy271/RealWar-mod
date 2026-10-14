@@ -2,7 +2,7 @@
 #import "GemState.h"
 
 @implementation GemOverlay {
-    UILabel *_countLabel;
+    CGFloat _dragStartY;
 }
 
 static UIWindow *GemKeyWindow(void) {
@@ -19,92 +19,81 @@ static UIWindow *GemKeyWindow(void) {
 + (void)installIfNeeded {
     UIWindow *window = GemKeyWindow();
     if (!window) return;
-    for (UIView *v in window.subviews) if ([v isKindOfClass:self]) return; // already installed
+    for (UIView *v in window.subviews) if ([v isKindOfClass:self]) return;
 
-    GemOverlay *overlay = [[GemOverlay alloc] initWithFrame:CGRectMake(0, 0, 220, 150)];
-    overlay.center = CGPointMake(CGRectGetMidX(window.bounds), window.safeAreaInsets.top + 120);
-    [window addSubview:overlay];
+    CGFloat size = 50;
+    CGFloat margin = 8;
+    GemOverlay *btn = [[GemOverlay alloc] initWithFrame:CGRectMake(
+        window.bounds.size.width - size - margin,
+        window.bounds.size.height * 0.4,
+        size, size
+    )];
+    [window addSubview:btn];
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
     if ((self = [super initWithFrame:frame])) {
-        self.backgroundColor = [UIColor.systemBackgroundColor colorWithAlphaComponent:0.92];
-        self.layer.cornerRadius = 16;
-        self.layer.masksToBounds = YES;
-
-        UIImageView *icon = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"diamond.fill"]];
-        icon.tintColor = UIColor.systemBlueColor;
-        icon.contentMode = UIViewContentModeScaleAspectFit;
-
-        UILabel *title = [UILabel new];
-        title.text = @"Gem Debug Demo";
-        title.font = [UIFont systemFontOfSize:17 weight:UIFontWeightBold];
-
-        _countLabel = [UILabel new];
-        _countLabel.font = [UIFont monospacedDigitSystemFontOfSize:32 weight:UIFontWeightBold];
-        [self refresh];
-
-        UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[icon, title, _countLabel]];
-        stack.axis = UILayoutConstraintAxisVertical;
-        stack.alignment = UIStackViewAlignmentCenter;
-        stack.spacing = 6;
-
-#if GEM_DEBUG_UI
-        UIAction *action = [UIAction actionWithTitle:@"Set debug gems to 99,999"
-                                               image:nil
-                                          identifier:nil
-                                             handler:^(__kindof UIAction *a) {
-            [[GemState shared] set_gemsAmountBigIntegerObservedValue];
-        }];
-        UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem primaryAction:action];
-        button.titleLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightSemibold];
-        [button setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
-        button.backgroundColor = UIColor.systemBlueColor;
-        button.layer.cornerRadius = 8;
-        button.translatesAutoresizingMaskIntoConstraints = NO;
-        [button.heightAnchor constraintEqualToConstant:32].active = YES;
-        [button.widthAnchor constraintEqualToConstant:190].active = YES;
-        [stack addArrangedSubview:button];
-#else
-        UILabel *note = [UILabel new];
-        note.text = @"Debug controls are unavailable in Release builds.";
-        note.font = [UIFont systemFontOfSize:10];
-        note.textColor = UIColor.secondaryLabelColor;
-        note.numberOfLines = 0;
-        note.textAlignment = NSTextAlignmentCenter;
-        [stack addArrangedSubview:note];
-#endif
-
-        stack.translatesAutoresizingMaskIntoConstraints = NO;
-        [self addSubview:stack];
+        // Appearance: circular gem button
+        self.backgroundColor = [UIColor.systemBlueColor colorWithAlphaComponent:0.85];
+        self.layer.cornerRadius = frame.size.width / 2;
+        self.layer.shadowColor = UIColor.blackColor.CGColor;
+        self.layer.shadowOffset = CGSizeMake(0, 2);
+        self.layer.shadowOpacity = 0.3;
+        self.layer.shadowRadius = 4;
+        
+        // Gem icon
+        UIImageConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:22 weight:UIImageSymbolWeightBold];
+        UIImage *gem = [UIImage systemImageNamed:@"diamond.fill" withConfiguration:cfg];
+        [self setImage:gem forState:UIControlStateNormal];
+        self.tintColor = UIColor.whiteColor;
+        
+        // +1 label
+        UILabel *plus = [UILabel new];
+        plus.text = @"+1";
+        plus.font = [UIFont systemFontOfSize:10 weight:UIFontWeightBold];
+        plus.textColor = UIColor.whiteColor;
+        plus.translatesAutoresizingMaskIntoConstraints = NO;
+        [self addSubview:plus];
         [NSLayoutConstraint activateConstraints:@[
-            [icon.heightAnchor constraintEqualToConstant:30],
-            [stack.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
-            [stack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [stack.widthAnchor constraintLessThanOrEqualToAnchor:self.widthAnchor constant:-16],
+            [plus.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
+            [plus.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-4],
         ]];
-
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refresh)
-            name:GemStateDidChangeNotification object:nil];
-
-        // Make it draggable so it never blocks the host UI.
-        [self addGestureRecognizer:[[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(pan:)]];
+        
+        // Tap action
+        [self addTarget:self action:@selector(tapped) forControlEvents:UIControlEventTouchUpInside];
+        
+        // Drag gesture (vertical only)
+        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(dragged:)];
+        [self addGestureRecognizer:pan];
     }
     return self;
 }
 
-- (void)refresh {
-    NSNumberFormatter *f = [NSNumberFormatter new];
-    f.numberStyle = NSNumberFormatterDecimalStyle;
-    _countLabel.text = [f stringFromNumber:@([GemState shared].gems)];
+- (void)tapped {
+    // Add +1 gem
+    [[GemState shared] addGems:1];
+    
+    // Quick pulse animation feedback
+    [UIView animateWithDuration:0.1 animations:^{
+        self.transform = CGAffineTransformMakeScale(1.2, 1.2);
+    } completion:^(BOOL finished) {
+        [UIView animateWithDuration:0.1 animations:^{
+            self.transform = CGAffineTransformIdentity;
+        }];
+    }];
 }
 
-- (void)pan:(UIPanGestureRecognizer *)g {
-    CGPoint t = [g translationInView:self.superview];
-    self.center = CGPointMake(self.center.x + t.x, self.center.y + t.y);
-    [g setTranslation:CGPointZero inView:self.superview];
+- (void)dragged:(UIPanGestureRecognizer *)pan {
+    CGPoint translation = [pan translationInView:self.superview];
+    
+    // Move only vertically, clamp to screen bounds
+    CGFloat newY = self.center.y + translation.y;
+    CGFloat minY = self.bounds.size.height / 2 + self.superview.safeAreaInsets.top;
+    CGFloat maxY = self.superview.bounds.size.height - self.bounds.size.height / 2 - self.superview.safeAreaInsets.bottom;
+    newY = MAX(minY, MIN(maxY, newY));
+    
+    self.center = CGPointMake(self.center.x, newY);
+    [pan setTranslation:CGPointZero inView:self.superview];
 }
-
-- (void)dealloc { [[NSNotificationCenter defaultCenter] removeObserver:self]; }
 
 @end

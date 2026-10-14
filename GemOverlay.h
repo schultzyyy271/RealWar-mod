@@ -1,6 +1,6 @@
 #import <UIKit/UIKit.h>
 
-/// UIKit port of the original SwiftUI ContentView, shown as a floating card.
-@interface GemOverlay : UIView
+/// Floating edge button that adds +1 gem per tap
+@interface GemOverlay : UIButton
 + (void)installIfNeeded;
 @end
